@@ -1,3 +1,7 @@
 {
-  "outputDirectory": "public"
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/token", "destination": "/api/token" },
+    { "source": "/(.*)", "destination": "/public/$1" }
+  ]
 }
