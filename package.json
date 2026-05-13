@@ -1,0 +1,12 @@
+{
+  "name": "zoe-liveavatar",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "node server.js",
+    "build": "echo ok"
+  },
+  "dependencies": {
+    "@heygen/liveavatar-web-sdk": "latest",
+    "express": "^4.18.2"
+  }
+}
