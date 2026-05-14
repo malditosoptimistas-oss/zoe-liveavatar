@@ -23,7 +23,7 @@ export default function ZOE() {
       const session = new LiveAvatarSession(data.token, { voiceChat: true });
       sesionRef.current = session;
 
-      session.on('session.stream_ready', async (data) => {
+      session.on('session.stream_ready', async () => {
         agregar('STREAM READY');
         await new Promise(r => setTimeout(r, 500));
         try {
@@ -36,27 +36,18 @@ export default function ZOE() {
             else if (videoTrack instanceof MediaStreamTrack) stream.addTrack(videoTrack);
             if (audioTrack && audioTrack.mediaStreamTrack) stream.addTrack(audioTrack.mediaStreamTrack);
             videoRef.current.srcObject = stream;
+            videoRef.current.muted = false;
+            videoRef.current.autoplay = true;
             videoRef.current.play().catch(e => agregar('play error: ' + e.message));
             setEstado('live');
             agregar('VIDEO INICIADO');
-          } else {
-            agregar('videoTrack no encontrado, probando room...');
-            const room = session.room;
-            agregar('room: ' + (room ? 'ok' : 'null'));
-            if (room) {
-              room.remoteParticipants.forEach((participant) => {
-                agregar('participant: ' + participant.identity);
-                participant.trackPublications.forEach((pub) => {
-                  agregar('track: ' + pub.kind + ' ' + pub.trackName);
-                  if (pub.kind === 'video' && pub.track) {
-                    const stream = new MediaStream([pub.track.mediaStreamTrack]);
-                    videoRef.current.srcObject = stream;
-                    videoRef.current.play();
-                    setEstado('live');
-                  }
-                });
-              });
-            }
+
+            // Reconectar el stream cada 2 segundos si se congela
+            setInterval(() => {
+              if (videoRef.current && videoRef.current.paused) {
+                videoRef.current.play().catch(() => {});
+              }
+            }, 2000);
           }
         } catch(e) {
           agregar('ERROR stream: ' + e.message);
