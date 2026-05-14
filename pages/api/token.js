@@ -7,9 +7,14 @@ export default async function handler(req, res) {
       headers: { 'X-API-KEY': process.env.LA_API_KEY, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         avatar_id: process.env.LA_AVATAR_ID,
-        avatar_persona: { voice_id: process.env.LA_VOICE_ID, context_id: process.env.LA_CONTEXT_ID, language: 'es' },
-        mode: 'FULL', is_sandbox: false, interactivity_type: 'CONVERSATIONAL',
-        llm_configuration_id: process.env.LA_LLM_ID
+        avatar_persona: {
+          voice_id:   process.env.LA_VOICE_ID,
+          context_id: process.env.LA_CONTEXT_ID,
+          language:   'es'
+        },
+        mode:               'FULL',
+        is_sandbox:         false,
+        interactivity_type: 'CONVERSATIONAL'
       })
     });
     const data = await response.json();
