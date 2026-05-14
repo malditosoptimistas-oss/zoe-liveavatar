@@ -19,36 +19,38 @@ export default function ZOE() {
       agregar('2. Token OK');
       agregar('3. Cargando SDK...');
       const mod = await import('@heygen/liveavatar-web-sdk');
-      agregar('4. SDK cargado. Keys: ' + Object.keys(mod).join(', '));
-      const LiveAvatarSession = mod.LiveAvatarSession || mod.default?.LiveAvatarSession;
-      if (!LiveAvatarSession) throw new Error('LiveAvatarSession no encontrado en el SDK');
-      agregar('5. LiveAvatarSession encontrado');
+      const LiveAvatarSession = mod.LiveAvatarSession;
       const session = new LiveAvatarSession(data.token, { voiceChat: true });
       sesionRef.current = session;
-      session.on('stream', (stream) => {
-        agregar('EVENTO: stream recibido');
-        if (videoRef.current) videoRef.current.srcObject = stream;
+
+      session.on('session.stream_ready', (data) => {
+        agregar('STREAM READY: ' + JSON.stringify(data));
+        // El stream puede estar en session.mediaStream o session.stream
+        const stream = session.mediaStream || session.stream || session.remoteStream;
+        agregar('Stream object: ' + (stream ? 'encontrado' : 'undefined'));
+        if (stream && videoRef.current) {
+          videoRef.current.srcObject = stream;
+          setEstado('live');
+        } else {
+          // Intentar obtener el video element del SDK
+          agregar('Buscando video en SDK...');
+          const videoEl = session.videoElement || session.getVideoElement?.();
+          agregar('videoElement: ' + (videoEl ? 'encontrado' : 'no encontrado'));
+          if (videoEl) {
+            document.getElementById('avatar-wrap').appendChild(videoEl);
+            setEstado('live');
+          }
+        }
       });
-      session.on('ready', () => {
-        agregar('EVENTO: ready');
-        setEstado('live');
-      });
-      session.on('connecting', () => agregar('EVENTO: connecting'));
-      session.on('connected',  () => agregar('EVENTO: connected'));
-      session.on('disconnected', (r) => agregar('EVENTO: disconnected → ' + JSON.stringify(r)));
-      session.on('stateChange', (s) => agregar('EVENTO: stateChange → ' + JSON.stringify(s)));
-      session.on('error', (e) => {
-        agregar('ERROR: ' + (e.message || JSON.stringify(e)));
-        setEstado('error');
-      });
-      const todosLosEventos = Object.values(mod.SessionEvent || {});
-      agregar('Eventos disponibles: ' + todosLosEventos.join(', '));
-      todosLosEventos.forEach(ev => {
-        session.on(ev, (data) => agregar('EVENTO SDK: ' + ev + ' → ' + JSON.stringify(data)));
-      });
+
+      session.on('session.state_changed', (s) => agregar('state: ' + s));
+      session.on('session.disconnected', (r) => { agregar('disconnected: ' + JSON.stringify(r)); setEstado('error'); });
+
       agregar('6. Iniciando sesión...');
       await session.start();
-      agregar('7. session.start() completado');
+      agregar('7. Iniciado — inspeccionando session...');
+      agregar('Keys de session: ' + Object.keys(session).join(', '));
+
     } catch(e) {
       agregar('EXCEPCION: ' + e.message);
       setEstado('error');
@@ -66,11 +68,9 @@ export default function ZOE() {
       {estado === 'connecting' && (
         <div style={{color:'rgba(255,255,255,0.5)',marginBottom:'2rem',letterSpacing:'3px'}}>CONECTANDO...</div>
       )}
-      {estado === 'live' && (
-        <div style={{width:'100%',maxWidth:'800px',aspectRatio:'16/9',borderRadius:'16px',overflow:'hidden',marginBottom:'2rem'}}>
-          <video ref={videoRef} autoPlay playsInline style={{width:'100%',height:'100%',objectFit:'cover',background:'#0a0a1a'}}/>
-        </div>
-      )}
+      <div id="avatar-wrap" style={{display:estado==='live'?'block':'none',width:'100%',maxWidth:'800px',aspectRatio:'16/9',borderRadius:'16px',overflow:'hidden',marginBottom:'2rem',background:'#0a0a1a'}}>
+        <video ref={videoRef} autoPlay playsInline style={{width:'100%',height:'100%',objectFit:'cover'}}/>
+      </div>
       {log.length > 0 && (
         <div style={{width:'100%',maxWidth:'800px',background:'rgba(255,255,255,0.05)',borderRadius:'8px',padding:'1rem',fontSize:'0.75rem',lineHeight:'1.8'}}>
           {log.map((l,i) => <div key={i} style={{color:l.startsWith('ERROR')||l.startsWith('EXCEP')?'#f87171':'rgba(255,255,255,0.6)'}}>{l}</div>)}
