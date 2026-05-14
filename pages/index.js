@@ -40,7 +40,6 @@ export default function ZOE() {
                     agregar('Attaching video track...');
                     pub.track.attach(videoRef.current);
                     setEstado('live');
-                    agregar('VIDEO ATTACHED');
                   }
                   if (pub.kind === 'audio') {
                     const audioEl = pub.track.attach();
@@ -62,6 +61,20 @@ export default function ZOE() {
               document.body.appendChild(audioEl);
             }
           });
+
+          // Publicar micrófono local para que ZOE escuche
+          try {
+            await new Promise(r => setTimeout(r, 500));
+            if (room.localParticipant) {
+              await room.localParticipant.setMicrophoneEnabled(true);
+              agregar('Micrófono local publicado OK');
+            } else {
+              agregar('localParticipant no disponible');
+            }
+          } catch(micErr) {
+            agregar('ERROR micrófono: ' + micErr.message);
+          }
+
         } catch(e) {
           agregar('ERROR: ' + e.message);
         }
