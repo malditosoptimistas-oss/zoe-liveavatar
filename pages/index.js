@@ -24,38 +24,51 @@ export default function ZOE() {
       sesionRef.current = session;
 
       session.on('session.stream_ready', async () => {
-        agregar('STREAM READY');
-        await new Promise(r => setTimeout(r, 500));
+        agregar('STREAM READY — esperando tracks...');
+        await new Promise(r => setTimeout(r, 1000));
         try {
-          const videoTrack = session._remoteVideoTrack;
-          const audioTrack = session._remoteAudioTrack;
-          agregar('videoTrack: ' + (videoTrack ? videoTrack.kind || 'ok' : 'null'));
-          if (videoTrack && videoRef.current) {
-            const stream = new MediaStream();
-            if (videoTrack.mediaStreamTrack) stream.addTrack(videoTrack.mediaStreamTrack);
-            else if (videoTrack instanceof MediaStreamTrack) stream.addTrack(videoTrack);
-            if (audioTrack && audioTrack.mediaStreamTrack) stream.addTrack(audioTrack.mediaStreamTrack);
-            videoRef.current.srcObject = stream;
-            videoRef.current.muted = false;
-            videoRef.current.autoplay = true;
-            videoRef.current.play().catch(e => agregar('play error: ' + e.message));
-            setEstado('live');
-            agregar('VIDEO INICIADO');
-
-            // Reconectar el stream cada 2 segundos si se congela
-            setInterval(() => {
-              if (videoRef.current && videoRef.current.paused) {
-                videoRef.current.play().catch(() => {});
-              }
-            }, 2000);
-          }
+          const room = session.room;
+          if (!room) { agregar('ERROR: room null'); return; }
+          agregar('Participantes remotos: ' + room.remoteParticipants.size);
+          const attachVideo = () => {
+            room.remoteParticipants.forEach((participant) => {
+              agregar('Participante: ' + participant.identity);
+              participant.trackPublications.forEach((pub) => {
+                agregar('Track: ' + pub.kind + ' subscribed:' + pub.isSubscribed);
+                if (pub.isSubscribed && pub.track) {
+                  if (pub.kind === 'video') {
+                    agregar('Attaching video track...');
+                    pub.track.attach(videoRef.current);
+                    setEstado('live');
+                    agregar('VIDEO ATTACHED');
+                  }
+                  if (pub.kind === 'audio') {
+                    const audioEl = pub.track.attach();
+                    document.body.appendChild(audioEl);
+                    agregar('AUDIO ATTACHED');
+                  }
+                }
+              });
+            });
+          };
+          attachVideo();
+          room.on('trackSubscribed', (track, pub, participant) => {
+            agregar('trackSubscribed: ' + track.kind);
+            if (track.kind === 'video') {
+              track.attach(videoRef.current);
+              setEstado('live');
+            } else if (track.kind === 'audio') {
+              const audioEl = track.attach();
+              document.body.appendChild(audioEl);
+            }
+          });
         } catch(e) {
-          agregar('ERROR stream: ' + e.message);
+          agregar('ERROR: ' + e.message);
         }
       });
 
       session.on('session.state_changed', (s) => agregar('state: ' + s));
-      session.on('session.disconnected', (r) => { agregar('disconnected: ' + JSON.stringify(r)); setEstado('error'); });
+      session.on('session.disconnected', () => { agregar('disconnected'); setEstado('idle'); });
 
       agregar('6. Iniciando sesión...');
       await session.start();
