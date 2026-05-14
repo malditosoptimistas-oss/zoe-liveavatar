@@ -41,6 +41,11 @@ export default function ZOE() {
         agregar('ERROR: ' + (e.message || JSON.stringify(e)));
         setEstado('error');
       });
+      const todosLosEventos = Object.values(mod.SessionEvent || {});
+      agregar('Eventos disponibles: ' + todosLosEventos.join(', '));
+      todosLosEventos.forEach(ev => {
+        session.on(ev, (data) => agregar('EVENTO SDK: ' + ev + ' → ' + JSON.stringify(data)));
+      });
       agregar('6. Iniciando sesión...');
       await session.start();
       agregar('7. session.start() completado');
