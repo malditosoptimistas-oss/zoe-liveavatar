@@ -30,28 +30,25 @@ export default function ZOE() {
           const room = session.room;
           if (!room) { agregar('ERROR: room null'); return; }
           agregar('Participantes remotos: ' + room.remoteParticipants.size);
-          const attachVideo = () => {
-            room.remoteParticipants.forEach((participant) => {
-              agregar('Participante: ' + participant.identity);
-              participant.trackPublications.forEach((pub) => {
-                agregar('Track: ' + pub.kind + ' subscribed:' + pub.isSubscribed);
-                if (pub.isSubscribed && pub.track) {
-                  if (pub.kind === 'video') {
-                    agregar('Attaching video track...');
-                    pub.track.attach(videoRef.current);
-                    setEstado('live');
-                  }
-                  if (pub.kind === 'audio') {
-                    const audioEl = pub.track.attach();
-                    document.body.appendChild(audioEl);
-                    agregar('AUDIO ATTACHED');
-                  }
+
+          room.remoteParticipants.forEach((participant) => {
+            agregar('Participante: ' + participant.identity);
+            participant.trackPublications.forEach((pub) => {
+              agregar('Track: ' + pub.kind + ' subscribed:' + pub.isSubscribed);
+              if (pub.isSubscribed && pub.track) {
+                if (pub.kind === 'video') {
+                  pub.track.attach(videoRef.current);
+                  setEstado('live');
+                } else if (pub.kind === 'audio') {
+                  const audioEl = pub.track.attach();
+                  document.body.appendChild(audioEl);
+                  agregar('AUDIO ATTACHED');
                 }
-              });
+              }
             });
-          };
-          attachVideo();
-          room.on('trackSubscribed', (track, pub, participant) => {
+          });
+
+          room.on('trackSubscribed', (track) => {
             agregar('trackSubscribed: ' + track.kind);
             if (track.kind === 'video') {
               track.attach(videoRef.current);
@@ -62,15 +59,18 @@ export default function ZOE() {
             }
           });
 
-          // Publicar micrófono local para que ZOE escuche
+          // Publicar micrófono
           try {
-            await new Promise(r => setTimeout(r, 500));
-            if (room.localParticipant) {
-              await room.localParticipant.setMicrophoneEnabled(true);
-              agregar('Micrófono local publicado OK');
-            } else {
-              agregar('localParticipant no disponible');
-            }
+            await room.localParticipant.setMicrophoneEnabled(true);
+            agregar('Micrófono local publicado OK');
+            agregar('Tracks locales: ' + room.localParticipant.trackPublications.size);
+            room.localParticipant.trackPublications.forEach((pub) => {
+              agregar('Track local: ' + pub.kind + ' source:' + (pub.track && pub.track.source));
+              // En LITE mode con ElevenLabs, el audio debe enviarse sin procesar
+              if (pub.kind === 'audio' && pub.track) {
+                agregar('Audio track habilitado: ' + !pub.track.isMuted);
+              }
+            });
           } catch(micErr) {
             agregar('ERROR micrófono: ' + micErr.message);
           }
