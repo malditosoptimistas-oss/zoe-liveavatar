@@ -23,23 +23,43 @@ export default function ZOE() {
       const session = new LiveAvatarSession(data.token, { voiceChat: true });
       sesionRef.current = session;
 
-      session.on('session.stream_ready', (data) => {
-        agregar('STREAM READY: ' + JSON.stringify(data));
-        // El stream puede estar en session.mediaStream o session.stream
-        const stream = session.mediaStream || session.stream || session.remoteStream;
-        agregar('Stream object: ' + (stream ? 'encontrado' : 'undefined'));
-        if (stream && videoRef.current) {
-          videoRef.current.srcObject = stream;
-          setEstado('live');
-        } else {
-          // Intentar obtener el video element del SDK
-          agregar('Buscando video en SDK...');
-          const videoEl = session.videoElement || session.getVideoElement?.();
-          agregar('videoElement: ' + (videoEl ? 'encontrado' : 'no encontrado'));
-          if (videoEl) {
-            document.getElementById('avatar-wrap').appendChild(videoEl);
+      session.on('session.stream_ready', async (data) => {
+        agregar('STREAM READY');
+        await new Promise(r => setTimeout(r, 500));
+        try {
+          const videoTrack = session._remoteVideoTrack;
+          const audioTrack = session._remoteAudioTrack;
+          agregar('videoTrack: ' + (videoTrack ? videoTrack.kind || 'ok' : 'null'));
+          if (videoTrack && videoRef.current) {
+            const stream = new MediaStream();
+            if (videoTrack.mediaStreamTrack) stream.addTrack(videoTrack.mediaStreamTrack);
+            else if (videoTrack instanceof MediaStreamTrack) stream.addTrack(videoTrack);
+            if (audioTrack && audioTrack.mediaStreamTrack) stream.addTrack(audioTrack.mediaStreamTrack);
+            videoRef.current.srcObject = stream;
+            videoRef.current.play().catch(e => agregar('play error: ' + e.message));
             setEstado('live');
+            agregar('VIDEO INICIADO');
+          } else {
+            agregar('videoTrack no encontrado, probando room...');
+            const room = session.room;
+            agregar('room: ' + (room ? 'ok' : 'null'));
+            if (room) {
+              room.remoteParticipants.forEach((participant) => {
+                agregar('participant: ' + participant.identity);
+                participant.trackPublications.forEach((pub) => {
+                  agregar('track: ' + pub.kind + ' ' + pub.trackName);
+                  if (pub.kind === 'video' && pub.track) {
+                    const stream = new MediaStream([pub.track.mediaStreamTrack]);
+                    videoRef.current.srcObject = stream;
+                    videoRef.current.play();
+                    setEstado('live');
+                  }
+                });
+              });
+            }
           }
+        } catch(e) {
+          agregar('ERROR stream: ' + e.message);
         }
       });
 
@@ -48,8 +68,7 @@ export default function ZOE() {
 
       agregar('6. Iniciando sesión...');
       await session.start();
-      agregar('7. Iniciado — inspeccionando session...');
-      agregar('Keys de session: ' + Object.keys(session).join(', '));
+      agregar('7. Iniciado');
 
     } catch(e) {
       agregar('EXCEPCION: ' + e.message);
@@ -68,7 +87,7 @@ export default function ZOE() {
       {estado === 'connecting' && (
         <div style={{color:'rgba(255,255,255,0.5)',marginBottom:'2rem',letterSpacing:'3px'}}>CONECTANDO...</div>
       )}
-      <div id="avatar-wrap" style={{display:estado==='live'?'block':'none',width:'100%',maxWidth:'800px',aspectRatio:'16/9',borderRadius:'16px',overflow:'hidden',marginBottom:'2rem',background:'#0a0a1a'}}>
+      <div style={{display:estado==='live'?'block':'none',width:'100%',maxWidth:'800px',aspectRatio:'16/9',borderRadius:'16px',overflow:'hidden',marginBottom:'2rem',background:'#0a0a1a'}}>
         <video ref={videoRef} autoPlay playsInline style={{width:'100%',height:'100%',objectFit:'cover'}}/>
       </div>
       {log.length > 0 && (
