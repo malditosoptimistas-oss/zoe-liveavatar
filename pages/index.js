@@ -1,71 +1,86 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 
 export default function ZOE() {
-  const videoRef   = useRef(null);
-  const sessionRef = useRef(null);
+  const videoRef  = useRef(null);
+  const sesionRef = useRef(null);
   const [estado, setEstado] = useState('idle');
-  const [error, setError]   = useState('');
+  const [log, setLog]       = useState([]);
+
+  function agregar(msg) {
+    setLog(prev => [...prev, msg]);
+    console.log(msg);
+  }
 
   async function iniciar() {
     setEstado('connecting');
+    setLog([]);
     try {
+      agregar('1. Obteniendo token...');
       const res  = await fetch('/api/token');
       const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      if (data.error) throw new Error('Token error: ' + data.error);
+      agregar('2. Token OK');
 
-      const { LiveAvatarSession } = await import('@heygen/liveavatar-web-sdk');
+      agregar('3. Cargando SDK...');
+      const mod = await import('@heygen/liveavatar-web-sdk');
+      agregar('4. SDK cargado. Keys: ' + Object.keys(mod).join(', '));
+
+      const LiveAvatarSession = mod.LiveAvatarSession || mod.default?.LiveAvatarSession;
+      if (!LiveAvatarSession) throw new Error('LiveAvatarSession no encontrado en el SDK');
+      agregar('5. LiveAvatarSession encontrado');
+
       const session = new LiveAvatarSession(data.token, { voiceChat: true });
-      sessionRef.current = session;
+      sesionRef.current = session;
 
       session.on('stream', (stream) => {
+        agregar('6. Stream recibido');
         if (videoRef.current) videoRef.current.srcObject = stream;
       });
-      session.on('ready', () => setEstado('live'));
-      session.on('error', (e) => { setError(e.message); setEstado('error'); });
+      session.on('ready', () => {
+        agregar('7. LISTO');
+        setEstado('live');
+      });
+      session.on('error', (e) => {
+        agregar('ERROR: ' + e.message);
+        setEstado('error');
+      });
 
+      agregar('6. Iniciando sesión...');
       await session.start();
+      agregar('7. session.start() completado');
+
     } catch(e) {
-      setError(e.message);
+      agregar('EXCEPCION: ' + e.message);
       setEstado('error');
     }
   }
 
   return (
-    <>
-      <style>{`*{margin:0;padding:0;box-sizing:border-box;}body{background:#060610;font-family:Inter,sans-serif;color:#fff;}`}</style>
-      <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',padding:'2rem',position:'relative'}}>
-        <div style={{position:'fixed',width:'700px',height:'700px',background:'radial-gradient(circle,rgba(79,70,229,0.12) 0%,transparent 70%)',top:'50%',left:'50%',transform:'translate(-50%,-50%)',pointerEvents:'none'}}/>
-        <div style={{position:'relative',zIndex:1,width:'100%',maxWidth:'960px',display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <div style={{fontSize:'0.65rem',letterSpacing:'8px',textTransform:'uppercase',color:'rgba(255,255,255,0.2)',marginBottom:'1rem'}}>Malditos Optimistas</div>
-          <div style={{fontSize:'4.5rem',fontWeight:700,letterSpacing:'-2px',background:'linear-gradient(135deg,#fff 0%,#a78bfa 60%,#7c3aed 100%)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent',lineHeight:1,marginBottom:'0.4rem'}}>ZOE</div>
-          <div style={{fontSize:'0.75rem',color:'rgba(255,255,255,0.25)',letterSpacing:'4px',textTransform:'uppercase',marginBottom:'2.5rem'}}>Co-conductora IA agéntica</div>
+    <div style={{minHeight:'100vh',background:'#060610',color:'#fff',fontFamily:'monospace',padding:'2rem',display:'flex',flexDirection:'column',alignItems:'center'}}>
+      <div style={{fontSize:'3rem',fontWeight:700,marginBottom:'0.5rem',background:'linear-gradient(135deg,#fff,#a78bfa)',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>ZOE</div>
+      <div style={{color:'rgba(255,255,255,0.3)',marginBottom:'2rem',fontSize:'0.8rem',letterSpacing:'3px'}}>MALDITOS OPTIMISTAS</div>
 
-          {(estado === 'idle' || estado === 'error') && (
-            <div style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-              <button onClick={iniciar} style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',color:'#fff',border:'none',padding:'18px 56px',borderRadius:'100px',fontSize:'1rem',fontWeight:600,letterSpacing:'1px',cursor:'pointer',boxShadow:'0 0 50px rgba(79,70,229,0.5)'}}>
-                Iniciar sesión en vivo
-              </button>
-              {error && <div style={{marginTop:'1rem',color:'rgba(239,68,68,0.8)',fontSize:'0.8rem'}}>{error}</div>}
-            </div>
-          )}
+      {(estado === 'idle' || estado === 'error') && (
+        <button onClick={iniciar} style={{background:'linear-gradient(135deg,#4f46e5,#7c3aed)',color:'#fff',border:'none',padding:'16px 48px',borderRadius:'100px',fontSize:'1rem',fontWeight:600,cursor:'pointer',marginBottom:'2rem'}}>
+          Iniciar sesión en vivo
+        </button>
+      )}
 
-          {estado === 'connecting' && (
-            <div style={{color:'rgba(255,255,255,0.4)',letterSpacing:'3px',fontSize:'0.8rem'}}>CONECTANDO...</div>
-          )}
+      {estado === 'connecting' && (
+        <div style={{color:'rgba(255,255,255,0.5)',marginBottom:'2rem',letterSpacing:'3px'}}>CONECTANDO...</div>
+      )}
 
-          {estado === 'live' && (
-            <div style={{width:'100%',aspectRatio:'16/9',borderRadius:'20px',overflow:'hidden',boxShadow:'0 0 80px rgba(79,70,229,0.3)',position:'relative',background:'#0a0a1a'}}>
-              <video ref={videoRef} autoPlay playsInline style={{width:'100%',height:'100%',objectFit:'cover'}}/>
-              <div style={{position:'absolute',top:'14px',left:'14px',background:'rgba(239,68,68,0.9)',color:'white',fontSize:'0.65rem',fontWeight:700,letterSpacing:'2px',padding:'5px 12px',borderRadius:'100px',display:'flex',alignItems:'center',gap:'6px'}}>
-                <div style={{width:'5px',height:'5px',background:'white',borderRadius:'50%',animation:'pulse 1.5s infinite'}}/>EN VIVO
-              </div>
-            </div>
-          )}
-
-          <div style={{marginTop:'1.5rem',fontSize:'0.7rem',color:'rgba(255,255,255,0.15)',letterSpacing:'2px',textTransform:'uppercase'}}>Malditos Optimistas · DNews & DGO · Latam</div>
+      {estado === 'live' && (
+        <div style={{width:'100%',maxWidth:'800px',aspectRatio:'16/9',borderRadius:'16px',overflow:'hidden',marginBottom:'2rem'}}>
+          <video ref={videoRef} autoPlay playsInline style={{width:'100%',height:'100%',objectFit:'cover',background:'#0a0a1a'}}/>
         </div>
-      </div>
-      <style>{`@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}`}</style>
-    </>
+      )}
+
+      {log.length > 0 && (
+        <div style={{width:'100%',maxWidth:'800px',background:'rgba(255,255,255,0.05)',borderRadius:'8px',padding:'1rem',fontSize:'0.75rem',lineHeight:'1.8'}}>
+          {log.map((l,i) => <div key={i} style={{color:l.startsWith('ERROR')||l.startsWith('EXCEP')?'#f87171':'rgba(255,255,255,0.6)'}}>{l}</div>)}
+        </div>
+      )}
+    </div>
   );
 }
