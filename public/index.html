@@ -22,6 +22,8 @@
     #avatar-video{width:100%;height:100%;object-fit:cover;}
     .live-badge{position:absolute;top:14px;left:14px;background:rgba(239,68,68,0.9);color:white;font-size:0.65rem;font-weight:700;letter-spacing:2px;padding:5px 12px;border-radius:100px;display:flex;align-items:center;gap:6px;z-index:10;}
     .live-dot{width:5px;height:5px;background:white;border-radius:50%;animation:pulse 1.5s infinite;}
+    .escucha-badge{position:absolute;top:14px;right:14px;background:rgba(79,70,229,0.85);color:white;font-size:0.65rem;font-weight:700;letter-spacing:2px;padding:5px 12px;border-radius:100px;display:none;align-items:center;gap:6px;z-index:10;}
+    .escucha-dot{width:5px;height:5px;background:#a78bfa;border-radius:50%;animation:pulse 1s infinite;}
     @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
     .footer{margin-top:1.5rem;font-size:0.7rem;color:rgba(255,255,255,0.15);letter-spacing:2px;text-transform:uppercase;}
   </style>
@@ -30,7 +32,7 @@
   <div class="wrap">
     <div class="brand">Malditos Optimistas</div>
     <div class="title">ZOE</div>
-    <div class="subtitle">Co-conductora IA agéntica</div>
+    <div class="subtitle">Profesora &amp; Co-conductora IA agéntica</div>
     <div id="start" style="display:flex;flex-direction:column;align-items:center;">
       <button class="btn" id="btn" onclick="iniciar()">Iniciar sesión en vivo</button>
       <div class="status" id="status"></div>
@@ -39,13 +41,96 @@
       <div class="avatar-wrap">
         <video id="avatar-video" autoplay playsinline></video>
         <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
+        <div class="escucha-badge" id="escucha-badge"><div class="escucha-dot"></div>ESCUCHANDO</div>
       </div>
     </div>
     <div class="footer">Malditos Optimistas &nbsp;·&nbsp; DNews &amp; DGO &nbsp;·&nbsp; Latam</div>
   </div>
+
   <script type="module">
     import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
+
     let keepAliveInterval = null;
+    let session = null;
+    let recognition = null;
+    let escuchandoZoe = false;
+    let timeoutZoe = null;
+
+    // ── DETECCIÓN DE PALABRA CLAVE "ZOE" ──────────────────────────
+    // Escucha el audio ambiente con SpeechRecognition (sin enviarlo a ElevenLabs)
+    // Solo cuando detecta "Zoe" activa el micrófono de LiveAvatar por 15 segundos
+
+    function iniciarDeteccionZoe() {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SpeechRecognition) {
+        console.log('SpeechRecognition no disponible — modo sin filtro');
+        return;
+      }
+
+      recognition = new SpeechRecognition();
+      recognition.lang = 'es-419';
+      recognition.continuous = true;
+      recognition.interimResults = true;
+
+      recognition.onresult = (event) => {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript.toLowerCase();
+          console.log('Escuchando:', transcript);
+
+          // Detectar "Zoe" o "Zoé" en el texto
+          if (/\bzo[eé]\b/i.test(transcript)) {
+            activarEscuchaZoe();
+          }
+        }
+      };
+
+      recognition.onerror = (e) => {
+        console.log('Recognition error:', e.error);
+        // Reiniciar si falla
+        setTimeout(() => {
+          try { recognition.start(); } catch(err) {}
+        }, 1000);
+      };
+
+      recognition.onend = () => {
+        // Reiniciar automáticamente para escucha continua
+        setTimeout(() => {
+          try { recognition.start(); } catch(err) {}
+        }, 300);
+      };
+
+      try { recognition.start(); } catch(err) {}
+    }
+
+    function activarEscuchaZoe() {
+      if (escuchandoZoe) {
+        // Reiniciar el timer si vuelven a llamarla
+        clearTimeout(timeoutZoe);
+      } else {
+        escuchandoZoe = true;
+        console.log('ZOE activada — escuchando por 15 segundos');
+        document.getElementById('escucha-badge').style.display = 'flex';
+
+        // Activar micrófono en LiveAvatar
+        if (session && session.setMicrophoneEnabled) {
+          session.setMicrophoneEnabled(true);
+        }
+      }
+
+      // Desactivar después de 15 segundos de silencio desde la última mención
+      timeoutZoe = setTimeout(() => {
+        escuchandoZoe = false;
+        console.log('ZOE desactivada — volviendo a esperar "Zoe"');
+        document.getElementById('escucha-badge').style.display = 'none';
+
+        // Silenciar micrófono en LiveAvatar
+        if (session && session.setMicrophoneEnabled) {
+          session.setMicrophoneEnabled(false);
+        }
+      }, 15000);
+    }
+
+    // ── INICIO DE SESIÓN ──────────────────────────────────────────
 
     window.iniciar = async function() {
       const btn = document.getElementById('btn');
@@ -57,11 +142,24 @@
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         status.textContent = 'INICIANDO AVATAR...';
-        const session = new LiveAvatarSession(data.token, { voiceChat: true });
-        session.on('stream', (stream) => { document.getElementById('avatar-video').srcObject = stream; });
+
+        session = new LiveAvatarSession(data.token, { 
+          voiceChat: true,
+          // Iniciar con micrófono desactivado — solo se activa cuando dicen "Zoe"
+          microphoneEnabled: false
+        });
+
+        session.on('stream', (stream) => { 
+          document.getElementById('avatar-video').srcObject = stream; 
+        });
+
         session.on('ready', () => {
           document.getElementById('start').style.display = 'none';
           document.getElementById('container').style.display = 'flex';
+
+          // Iniciar detección de palabra clave
+          iniciarDeteccionZoe();
+
           const sessionId = data.session_id;
           keepAliveInterval = setInterval(async () => {
             try {
@@ -73,14 +171,18 @@
             } catch(e) { console.log('keepalive error', e); }
           }, 30000);
         });
+
         session.on('error', (e) => { 
           status.textContent = 'Error: '+e.message; 
           btn.disabled=false; 
           btn.textContent='Reintentar';
           clearInterval(keepAliveInterval);
+          if (recognition) { try { recognition.stop(); } catch(err) {} }
         });
+
         session.on('disconnected', () => {
           clearInterval(keepAliveInterval);
+          if (recognition) { try { recognition.stop(); } catch(err) {} }
           setTimeout(() => {
             document.getElementById('start').style.display = 'flex';
             document.getElementById('container').style.display = 'none';
@@ -89,6 +191,7 @@
             iniciar();
           }, 3000);
         });
+
         await session.start();
       } catch(e) {
         status.textContent = 'Error: ' + e.message;
