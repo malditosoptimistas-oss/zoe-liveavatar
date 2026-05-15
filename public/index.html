@@ -63,6 +63,7 @@
         });
         session.on('error', (e) => { status.textContent = 'Error: '+e.message; btn.disabled=false; btn.textContent='Reintentar'; });
         session.on('disconnected', () => {
+          clearInterval(keepAlive);
           setTimeout(() => {
             document.getElementById('start').style.display = 'flex';
             document.getElementById('container').style.display = 'none';
@@ -72,6 +73,16 @@
           }, 3000);
         });
         await session.start();
+        const keepAlive = setInterval(() => {
+          const ctx = new AudioContext();
+          const oscillator = ctx.createOscillator();
+          const gain = ctx.createGain();
+          gain.gain.value = 0.001;
+          oscillator.connect(gain);
+          gain.connect(ctx.destination);
+          oscillator.start();
+          setTimeout(() => { oscillator.stop(); ctx.close(); }, 200);
+        }, 25000);
       } catch(e) {
         status.textContent = 'Error: ' + e.message;
         btn.disabled = false; btn.textContent = 'Reintentar';
