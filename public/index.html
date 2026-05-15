@@ -45,11 +45,31 @@
   </div>
   <script type="module">
     import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
+    let audioCtx = null;
+    let keepAliveInterval = null;
+
+    function startKeepAlive() {
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      keepAliveInterval = setInterval(() => {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const oscillator = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.0001;
+        oscillator.connect(gain);
+        gain.connect(audioCtx.destination);
+        oscillator.start();
+        setTimeout(() => oscillator.stop(), 200);
+      }, 20000);
+    }
+
     window.iniciar = async function() {
       const btn = document.getElementById('btn');
       const status = document.getElementById('status');
       btn.disabled = true; btn.textContent = 'Conectando...';
       status.textContent = 'OBTENIENDO TOKEN...';
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
       try {
         const res  = await fetch('/api/token');
         const data = await res.json();
@@ -60,10 +80,16 @@
         session.on('ready', () => {
           document.getElementById('start').style.display = 'none';
           document.getElementById('container').style.display = 'flex';
+          startKeepAlive();
         });
-        session.on('error', (e) => { status.textContent = 'Error: '+e.message; btn.disabled=false; btn.textContent='Reintentar'; });
+        session.on('error', (e) => { 
+          status.textContent = 'Error: '+e.message; 
+          btn.disabled=false; 
+          btn.textContent='Reintentar';
+          clearInterval(keepAliveInterval);
+        });
         session.on('disconnected', () => {
-          clearInterval(keepAlive);
+          clearInterval(keepAliveInterval);
           setTimeout(() => {
             document.getElementById('start').style.display = 'flex';
             document.getElementById('container').style.display = 'none';
@@ -73,19 +99,10 @@
           }, 3000);
         });
         await session.start();
-        const keepAlive = setInterval(() => {
-          const ctx = new AudioContext();
-          const oscillator = ctx.createOscillator();
-          const gain = ctx.createGain();
-          gain.gain.value = 0.001;
-          oscillator.connect(gain);
-          gain.connect(ctx.destination);
-          oscillator.start();
-          setTimeout(() => { oscillator.stop(); ctx.close(); }, 200);
-        }, 25000);
       } catch(e) {
         status.textContent = 'Error: ' + e.message;
         btn.disabled = false; btn.textContent = 'Reintentar';
+        clearInterval(keepAliveInterval);
       }
     };
   </script>
