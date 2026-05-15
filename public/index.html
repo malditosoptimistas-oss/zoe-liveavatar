@@ -45,31 +45,13 @@
   </div>
   <script type="module">
     import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
-    let audioCtx = null;
     let keepAliveInterval = null;
-
-    function startKeepAlive() {
-      if (!audioCtx) audioCtx = new AudioContext();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      keepAliveInterval = setInterval(() => {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const oscillator = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        gain.gain.value = 0.0001;
-        oscillator.connect(gain);
-        gain.connect(audioCtx.destination);
-        oscillator.start();
-        setTimeout(() => oscillator.stop(), 200);
-      }, 20000);
-    }
 
     window.iniciar = async function() {
       const btn = document.getElementById('btn');
       const status = document.getElementById('status');
       btn.disabled = true; btn.textContent = 'Conectando...';
       status.textContent = 'OBTENIENDO TOKEN...';
-      if (!audioCtx) audioCtx = new AudioContext();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
       try {
         const res  = await fetch('/api/token');
         const data = await res.json();
@@ -80,7 +62,16 @@
         session.on('ready', () => {
           document.getElementById('start').style.display = 'none';
           document.getElementById('container').style.display = 'flex';
-          startKeepAlive();
+          const sessionId = data.session_id;
+          keepAliveInterval = setInterval(async () => {
+            try {
+              await fetch('/api/keepalive', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId })
+              });
+            } catch(e) { console.log('keepalive error', e); }
+          }, 30000);
         });
         session.on('error', (e) => { 
           status.textContent = 'Error: '+e.message; 
