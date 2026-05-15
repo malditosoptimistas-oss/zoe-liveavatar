@@ -62,6 +62,15 @@
           document.getElementById('container').style.display = 'flex';
         });
         session.on('error', (e) => { status.textContent = 'Error: '+e.message; btn.disabled=false; btn.textContent='Reintentar'; });
+        session.on('disconnected', () => {
+          setTimeout(() => {
+            document.getElementById('start').style.display = 'flex';
+            document.getElementById('container').style.display = 'none';
+            document.getElementById('btn').disabled = false;
+            document.getElementById('btn').textContent = 'Reconectando...';
+            iniciar();
+          }, 3000);
+        });
         await session.start();
       } catch(e) {
         status.textContent = 'Error: ' + e.message;
