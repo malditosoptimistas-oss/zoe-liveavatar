@@ -63,7 +63,7 @@ document.getElementById('btn').onclick = async function() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     status.textContent = 'INICIANDO AVATAR...';
-    session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: false });
+    session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: true });
     session.on('stream', (stream) => { document.getElementById('avatar-video').srcObject = stream; });
     session.on('ready', () => {
       document.getElementById('start').style.display = 'none';
@@ -97,7 +97,7 @@ document.getElementById('btn').onclick = async function() {
         document.getElementById('start').style.display = 'flex';
         document.getElementById('container').style.display = 'none';
         btn.disabled = false;
-        btn.textContent = 'Iniciar sesión en vivo';
+        btn.textContent = 'Reintentar';
       }
     });
     await session.start();
