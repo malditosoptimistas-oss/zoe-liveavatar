@@ -1,12 +1,14 @@
-import { useEffect } from 'react';
+import dynamic from 'next/dynamic';
 
-export default function Home() {
-  useEffect(() => {
-    const s = document.createElement('script');
-    s.type = 'module';
-    s.src = '/zoe-init.js';
-    document.body.appendChild(s);
-  }, []);
+const ZoeApp = dynamic(() => Promise.resolve(() => {
+  if (typeof window !== 'undefined') {
+    if (!document.querySelector('script[src="/zoe-init.js"]')) {
+      const s = document.createElement('script');
+      s.type = 'module';
+      s.src = '/zoe-init.js';
+      document.body.appendChild(s);
+    }
+  }
 
   return (
     <>
@@ -57,4 +59,8 @@ export default function Home() {
       </div>
     </>
   );
+}), { ssr: false });
+
+export default function Home() {
+  return <ZoeApp />;
 }
