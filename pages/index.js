@@ -1,14 +1,6 @@
-import Head from 'next/head';
-
 export default function Home() {
   return (
     <>
-      <Head>
-        <title>ZOE — Malditos Optimistas</title>
-        <meta charSet="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
-      </Head>
       <style>{`
         *{margin:0;padding:0;box-sizing:border-box;}
         body{background:#060610;font-family:'Inter',sans-serif;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;}
@@ -32,14 +24,17 @@ export default function Home() {
         .escucha-dot{width:5px;height:5px;background:#a78bfa;border-radius:50%;animation:pulse 1s infinite;}
         @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
         .footer{margin-top:1.5rem;font-size:0.7rem;color:rgba(255,255,255,0.15);letter-spacing:2px;text-transform:uppercase;}
+        .sponsor{margin-top:0.5rem;font-size:0.6rem;color:rgba(255,255,255,0.1);letter-spacing:3px;text-transform:uppercase;}
       `}</style>
+
+      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
 
       <div className="wrap">
         <div className="brand">Malditos Optimistas</div>
         <div className="title">ZOE</div>
         <div className="subtitle">Profesora & Co-conductora IA agéntica</div>
         <div id="start" style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <button className="btn" id="btn" onClick={() => window.iniciar()}>Iniciar sesión en vivo</button>
+          <button className="btn" id="btn">Iniciar sesión en vivo</button>
           <div className="status" id="status"></div>
         </div>
         <div id="container">
@@ -48,13 +43,19 @@ export default function Home() {
             <div className="live-badge"><div className="live-dot"></div>EN VIVO</div>
             <div className="escucha-badge" id="escucha-badge"><div className="escucha-dot"></div>ESCUCHANDO</div>
           </div>
-          <button className="btn-desconectar" id="btn-desconectar" onClick={() => window.desconectar()}>Finalizar sesión</button>
+          <button className="btn-desconectar" id="btn-desconectar">Finalizar sesión</button>
         </div>
         <div className="footer">Malditos Optimistas &nbsp;·&nbsp; DNews &amp; DGO &nbsp;·&nbsp; Latam</div>
+        <div className="sponsor">Sponsor oficial: PAX Assistance</div>
       </div>
 
       <script dangerouslySetInnerHTML={{__html: `
         (async function() {
+          await new Promise(r => {
+            if (document.readyState === 'complete') return r();
+            window.addEventListener('load', r);
+          });
+
           const { LiveAvatarSession } = await import('https://esm.run/@heygen/liveavatar-web-sdk');
 
           let keepAliveInterval = null;
@@ -65,56 +66,42 @@ export default function Home() {
           let desconectadoManualmente = false;
 
           function iniciarDeteccionZoe() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-              console.log('SpeechRecognition no disponible — modo sin filtro');
-              return;
-            }
-            recognition = new SpeechRecognition();
+            const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SR) return;
+            recognition = new SR();
             recognition.lang = 'es-419';
             recognition.continuous = true;
             recognition.interimResults = true;
-            recognition.onresult = (event) => {
-              for (let i = event.resultIndex; i < event.results.length; i++) {
-                const transcript = event.results[i][0].transcript.toLowerCase();
-                if (/\\bzo[eé]\\b/i.test(transcript)) {
-                  activarEscuchaZoe();
-                }
+            recognition.onresult = (e) => {
+              for (let i = e.resultIndex; i < e.results.length; i++) {
+                const t = e.results[i][0].transcript.toLowerCase();
+                if (/\\bzo[eé]\\b/i.test(t)) activarEscuchaZoe();
               }
             };
-            recognition.onerror = (e) => {
-              setTimeout(() => { try { recognition.start(); } catch(err) {} }, 1000);
-            };
-            recognition.onend = () => {
-              setTimeout(() => { try { recognition.start(); } catch(err) {} }, 300);
-            };
-            try { recognition.start(); } catch(err) {}
+            recognition.onerror = () => setTimeout(() => { try { recognition.start(); } catch(e) {} }, 1000);
+            recognition.onend = () => setTimeout(() => { try { recognition.start(); } catch(e) {} }, 300);
+            try { recognition.start(); } catch(e) {}
           }
 
           function activarEscuchaZoe() {
-            if (escuchandoZoe) {
-              clearTimeout(timeoutZoe);
-            } else {
+            if (escuchandoZoe) { clearTimeout(timeoutZoe); }
+            else {
               escuchandoZoe = true;
               document.getElementById('escucha-badge').style.display = 'flex';
-              if (session && session.setMicrophoneEnabled) {
-                session.setMicrophoneEnabled(true);
-              }
+              if (session && session.setMicrophoneEnabled) session.setMicrophoneEnabled(true);
             }
             timeoutZoe = setTimeout(() => {
               escuchandoZoe = false;
               document.getElementById('escucha-badge').style.display = 'none';
-              if (session && session.setMicrophoneEnabled) {
-                session.setMicrophoneEnabled(false);
-              }
+              if (session && session.setMicrophoneEnabled) session.setMicrophoneEnabled(false);
             }, 15000);
           }
 
-          window.desconectar = function() {
+          document.getElementById('btn-desconectar').onclick = function() {
             desconectadoManualmente = true;
             clearInterval(keepAliveInterval);
-            if (recognition) { try { recognition.stop(); } catch(err) {} }
-            if (session) { try { session.stop(); } catch(err) {} }
+            if (recognition) { try { recognition.stop(); } catch(e) {} }
+            if (session) { try { session.stop(); } catch(e) {} }
             document.getElementById('start').style.display = 'flex';
             document.getElementById('container').style.display = 'none';
             document.getElementById('btn').disabled = false;
@@ -122,11 +109,12 @@ export default function Home() {
             document.getElementById('btn-desconectar').style.display = 'none';
           };
 
-          window.iniciar = async function() {
+          document.getElementById('btn').onclick = async function() {
             desconectadoManualmente = false;
             const btn = document.getElementById('btn');
             const status = document.getElementById('status');
-            btn.disabled = true; btn.textContent = 'Conectando...';
+            btn.disabled = true;
+            btn.textContent = 'Conectando...';
             status.textContent = 'OBTENIENDO TOKEN...';
             try {
               const res = await fetch('/api/token');
@@ -148,13 +136,13 @@ export default function Home() {
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ session_id: sessionId })
                     });
-                  } catch(e) { console.log('keepalive error', e); }
+                  } catch(e) {}
                 }, 30000);
               });
               session.on('error', (e) => {
-                status.textContent = 'Error: '+e.message;
-                btn.disabled=false;
-                btn.textContent='Reintentar';
+                status.textContent = 'Error: ' + e.message;
+                btn.disabled = false;
+                btn.textContent = 'Reintentar';
                 clearInterval(keepAliveInterval);
                 document.getElementById('btn-desconectar').style.display = 'none';
                 if (recognition) { try { recognition.stop(); } catch(err) {} }
@@ -166,14 +154,15 @@ export default function Home() {
                 if (!desconectadoManualmente) {
                   document.getElementById('start').style.display = 'flex';
                   document.getElementById('container').style.display = 'none';
-                  document.getElementById('btn').disabled = false;
-                  document.getElementById('btn').textContent = 'Iniciar sesión en vivo';
+                  btn.disabled = false;
+                  btn.textContent = 'Iniciar sesión en vivo';
                 }
               });
               await session.start();
             } catch(e) {
               status.textContent = 'Error: ' + e.message;
-              btn.disabled = false; btn.textContent = 'Reintentar';
+              btn.disabled = false;
+              btn.textContent = 'Reintentar';
               clearInterval(keepAliveInterval);
             }
           };
