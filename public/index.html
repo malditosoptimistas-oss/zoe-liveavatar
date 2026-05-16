@@ -42,7 +42,7 @@
     </div>
     <div id="container">
       <div class="avatar-wrap">
-        <video id="avatar-video" autoplay playsinline></video>
+        <video id="avatar-video" autoplay playsinline muted></video>
         <div class="live-badge"><div class="live-dot"></div>EN VIVO</div>
         <div class="escucha-badge" id="escucha-badge"><div class="escucha-dot"></div>ESCUCHANDO</div>
       </div>
@@ -139,12 +139,18 @@
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         status.textContent = 'INICIANDO AVATAR...';
+
         session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: true });
+
         session.on('stream', (stream) => {
           const video = document.getElementById('avatar-video');
           video.srcObject = stream;
-          video.play().catch(() => { video.muted = true; video.play(); });
+          video.muted = true;
+          video.play().then(() => {
+            setTimeout(() => { video.muted = false; }, 1000);
+          }).catch(() => {});
         });
+
         session.on('ready', () => {
           document.getElementById('start').style.display = 'none';
           document.getElementById('container').style.display = 'flex';
@@ -153,12 +159,14 @@
           startKeepAlive();
           iniciarDeteccionZoe();
         });
+
         session.on('error', (e) => {
           status.textContent = 'Error: ' + e.message;
           btn.disabled = false;
           btn.textContent = 'Reintentar';
           clearInterval(keepAliveInterval);
         });
+
         session.on('disconnected', () => {
           clearInterval(keepAliveInterval);
           if (recognition) { try { recognition.stop(); } catch(e) {} }
@@ -174,6 +182,7 @@
             }, 3000);
           }
         });
+
         await session.start();
       } catch(e) {
         status.textContent = 'Error: ' + e.message;
