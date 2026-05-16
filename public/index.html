@@ -17,7 +17,7 @@
     .btn:hover{transform:scale(1.04);}
     .btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;}
     .btn-desconectar{background:rgba(255,255,255,0.08);color:rgba(255,255,255,0.4);border:1px solid rgba(255,255,255,0.1);padding:10px 28px;border-radius:100px;font-size:0.75rem;font-family:'Inter',sans-serif;font-weight:600;letter-spacing:1px;cursor:pointer;transition:all 0.3s;margin-top:1rem;display:none;}
-    .btn-desconectar:hover{background:rgba(255,80,80,0.15);color:rgba(255,100,100,0.8);border-color:rgba(255,80,80,0.3);}
+    .btn-desconectar:hover{background:rgba(255,80,80,0.15);color:rgba(255,100,100,0.8);}
     .status{margin-top:1.5rem;font-size:0.8rem;color:rgba(255,255,255,0.3);letter-spacing:2px;min-height:1.2rem;}
     #container{display:none;width:100%;flex-direction:column;align-items:center;}
     .avatar-wrap{width:100%;aspect-ratio:16/9;border-radius:20px;overflow:hidden;box-shadow:0 0 80px rgba(79,70,229,0.3);position:relative;background:#0a0a1a;}
@@ -48,19 +48,37 @@
       </div>
       <button class="btn-desconectar" id="btn-desconectar">Finalizar sesión</button>
     </div>
-    <div class="footer">Malditos Optimistas &nbsp;·&nbsp; DNews &amp; DGO &nbsp;·&nbsp; Latam</div>
+    <div class="footer">Malditos Optimistas &nbsp;·&nbsp; DNews & DGO &nbsp;·&nbsp; Latam</div>
     <div class="sponsor">Sponsor oficial: PAX Assistance</div>
   </div>
 
   <script type="module">
     import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
 
-    let keepAliveInterval = null;
     let session = null;
+    let keepAliveInterval = null;
+    let audioCtx = null;
     let recognition = null;
     let escuchandoZoe = false;
     let timeoutZoe = null;
     let desconectadoManualmente = false;
+
+    function startKeepAlive() {
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      keepAliveInterval = setInterval(() => {
+        try {
+          if (audioCtx.state === 'suspended') audioCtx.resume();
+          const osc = audioCtx.createOscillator();
+          const gain = audioCtx.createGain();
+          gain.gain.value = 0.0001;
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+          setTimeout(() => osc.stop(), 200);
+        } catch(e) {}
+      }, 20000);
+    }
 
     function iniciarDeteccionZoe() {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -90,7 +108,6 @@
       timeoutZoe = setTimeout(() => {
         escuchandoZoe = false;
         document.getElementById('escucha-badge').style.display = 'none';
-        if (session && session.setMicrophoneEnabled) session.setMicrophoneEnabled(false);
       }, 15000);
     }
 
@@ -113,46 +130,48 @@
       btn.disabled = true;
       btn.textContent = 'Conectando...';
       status.textContent = 'OBTENIENDO TOKEN...';
+
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+
       try {
         const res = await fetch('/api/token');
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         status.textContent = 'INICIANDO AVATAR...';
-        session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: false });
-        session.on('stream', (stream) => { document.getElementById('avatar-video').srcObject = stream; });
+        session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: true });
+        session.on('stream', (stream) => {
+          const video = document.getElementById('avatar-video');
+          video.srcObject = stream;
+          video.play().catch(() => { video.muted = true; video.play(); });
+        });
         session.on('ready', () => {
           document.getElementById('start').style.display = 'none';
           document.getElementById('container').style.display = 'flex';
           document.getElementById('btn-desconectar').style.display = 'block';
+          status.textContent = '';
+          startKeepAlive();
           iniciarDeteccionZoe();
-          const sessionId = data.session_id;
-          keepAliveInterval = setInterval(async () => {
-            try {
-              await fetch('/api/keepalive', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: sessionId })
-              });
-            } catch(e) {}
-          }, 30000);
         });
         session.on('error', (e) => {
           status.textContent = 'Error: ' + e.message;
           btn.disabled = false;
           btn.textContent = 'Reintentar';
           clearInterval(keepAliveInterval);
-          document.getElementById('btn-desconectar').style.display = 'none';
-          if (recognition) { try { recognition.stop(); } catch(err) {} }
         });
         session.on('disconnected', () => {
           clearInterval(keepAliveInterval);
-          document.getElementById('btn-desconectar').style.display = 'none';
-          if (recognition) { try { recognition.stop(); } catch(err) {} }
+          if (recognition) { try { recognition.stop(); } catch(e) {} }
           if (!desconectadoManualmente) {
-            document.getElementById('start').style.display = 'flex';
-            document.getElementById('container').style.display = 'none';
-            btn.disabled = false;
-            btn.textContent = 'Iniciar sesión en vivo';
+            document.getElementById('btn-desconectar').style.display = 'none';
+            status.textContent = 'RECONECTANDO...';
+            setTimeout(() => {
+              document.getElementById('start').style.display = 'flex';
+              document.getElementById('container').style.display = 'none';
+              btn.disabled = false;
+              btn.textContent = 'Reconectando...';
+              btn.click();
+            }, 3000);
           }
         });
         await session.start();
