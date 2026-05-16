@@ -2,8 +2,10 @@ import { useEffect } from 'react';
 
 export default function Home() {
   useEffect(() => {
-    async function init() {
-      const { LiveAvatarSession } = await import('https://esm.run/@heygen/liveavatar-web-sdk');
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.textContent = `
+      import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
 
       let keepAliveInterval = null;
       let session = null;
@@ -22,7 +24,7 @@ export default function Home() {
         recognition.onresult = (e) => {
           for (let i = e.resultIndex; i < e.results.length; i++) {
             const t = e.results[i][0].transcript.toLowerCase();
-            if (/\bzo[eé]\b/i.test(t)) activarEscuchaZoe();
+            if (/\\bzo[eé]\\b/i.test(t)) activarEscuchaZoe();
           }
         };
         recognition.onerror = () => setTimeout(() => { try { recognition.start(); } catch(e) {} }, 1000);
@@ -113,9 +115,8 @@ export default function Home() {
           clearInterval(keepAliveInterval);
         }
       };
-    }
-
-    init();
+    `;
+    document.body.appendChild(script);
   }, []);
 
   return (
