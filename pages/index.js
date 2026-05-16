@@ -1,4 +1,13 @@
+import { useEffect } from 'react';
+
 export default function Home() {
+  useEffect(() => {
+    const s = document.createElement('script');
+    s.type = 'module';
+    s.src = '/zoe-init.js';
+    document.body.appendChild(s);
+  }, []);
+
   return (
     <>
       <style>{`
@@ -45,7 +54,6 @@ export default function Home() {
         </div>
         <div className="footer">Malditos Optimistas &nbsp;·&nbsp; DNews &amp; DGO &nbsp;·&nbsp; Latam</div>
         <div className="sponsor">Sponsor oficial: PAX Assistance</div>
-        <script type="module" src="/zoe-init.js"></script>
       </div>
     </>
   );
