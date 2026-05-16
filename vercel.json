@@ -1,12 +1,3 @@
 {
-  "functions": {
-    "pages/api/*.js": {
-      "runtime": "nodejs20.x"
-    }
-  },
-  "rewrites": [
-    { "source": "/api/token", "destination": "/pages/api/token" },
-    { "source": "/api/keepalive", "destination": "/pages/api/keepalive" },
-    { "source": "/(.*)", "destination": "/index.html" }
-  ]
+  "framework": "nextjs"
 }
