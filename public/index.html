@@ -100,7 +100,7 @@
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         status.textContent = 'INICIANDO AVATAR...';
-        session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: false });
+        session = new LiveAvatarSession(data.token, { voiceChat: true });
         session.on('stream', (stream) => { document.getElementById('avatar-video').srcObject = stream; });
         session.on('ready', () => {
           document.getElementById('start').style.display = 'none';
