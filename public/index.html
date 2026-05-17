@@ -107,30 +107,32 @@
         const data = await res.json();
         if (data.error) throw new Error(data.error);
 
+        const video = document.getElementById('avatar-video');
+
         session = new LiveAvatarSession(data.token, {
           voiceChat: true,
           microphoneEnabled: true
         });
 
-        // Todos los eventos posibles para mostrar el avatar
+        // Método attach() oficial del SDK
+        try {
+          session.on(SessionEvent.SESSION_STREAM_READY, async () => {
+            try { await session.attach(video); } catch(e) {}
+            mostrarAvatar();
+          });
+        } catch(e) {}
+
+        // Fallback con srcObject
         session.on('stream', (stream) => {
-          const video = document.getElementById('avatar-video');
           video.srcObject = stream;
           video.muted = true;
           video.play().then(() => {
             setTimeout(() => { video.muted = false; }, 500);
-            mostrarAvatar();
-          }).catch(() => { mostrarAvatar(); });
+          }).catch(() => {});
+          mostrarAvatar();
         });
 
         session.on('ready', () => { mostrarAvatar(); });
-
-        try {
-          session.on(SessionEvent.SESSION_STREAM_READY, () => { mostrarAvatar(); });
-        } catch(e) {}
-
-        // Fallback: si en 15 segundos no apareció, mostrar igual
-        setTimeout(() => { mostrarAvatar(); }, 15000);
 
         session.on('error', (e) => {
           ocultarLoader();
