@@ -65,11 +65,12 @@
   </div>
 
   <script type="module">
-    import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
+    import { LiveAvatarSession, SessionEvent } from 'https://esm.run/@heygen/liveavatar-web-sdk';
 
     let keepAliveInterval = null;
     let session = null;
     let loaderInterval = null;
+    let mostrado = false;
     const msgs = ['CONECTANDO CON ZOE','INICIANDO AVATAR','PREPARANDO AUDIO','CASI LISTO'];
 
     function mostrarLoader(texto) {
@@ -88,7 +89,18 @@
       document.getElementById('loading').style.display = 'none';
     }
 
+    function mostrarAvatar() {
+      if (mostrado) return;
+      mostrado = true;
+      ocultarLoader();
+      document.getElementById('container').style.display = 'flex';
+      keepAliveInterval = setInterval(async () => {
+        try { if (session && session.keepAlive) await session.keepAlive(); } catch(e) {}
+      }, 25000);
+    }
+
     window.iniciar = async function() {
+      mostrado = false;
       mostrarLoader();
       try {
         const res = await fetch('/api/token?t=' + Date.now(), { cache: 'no-store' });
@@ -100,20 +112,25 @@
           microphoneEnabled: true
         });
 
+        // Todos los eventos posibles para mostrar el avatar
         session.on('stream', (stream) => {
           const video = document.getElementById('avatar-video');
           video.srcObject = stream;
           video.muted = true;
-          video.play().then(() => { setTimeout(() => { video.muted = false; }, 500); }).catch(() => {});
+          video.play().then(() => {
+            setTimeout(() => { video.muted = false; }, 500);
+            mostrarAvatar();
+          }).catch(() => { mostrarAvatar(); });
         });
 
-        session.on('ready', () => {
-          ocultarLoader();
-          document.getElementById('container').style.display = 'flex';
-          keepAliveInterval = setInterval(async () => {
-            try { if (session && session.keepAlive) await session.keepAlive(); } catch(e) {}
-          }, 25000);
-        });
+        session.on('ready', () => { mostrarAvatar(); });
+
+        try {
+          session.on(SessionEvent.SESSION_STREAM_READY, () => { mostrarAvatar(); });
+        } catch(e) {}
+
+        // Fallback: si en 15 segundos no apareció, mostrar igual
+        setTimeout(() => { mostrarAvatar(); }, 15000);
 
         session.on('error', (e) => {
           ocultarLoader();
@@ -126,6 +143,7 @@
 
         session.on('disconnected', () => {
           clearInterval(keepAliveInterval);
+          mostrado = false;
           document.getElementById('container').style.display = 'none';
           mostrarLoader('RECONECTANDO...');
           setTimeout(() => { window.iniciar(); }, 3000);
