@@ -42,7 +42,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         mode: 'LITE',
         avatar_id: process.env.LA_AVATAR_ID,
-        silence_detection: false,
+        max_session_duration: 1200,
+        is_sandbox: false,
         elevenlabs_agent_config: {
           secret_id: secretId,
           agent_id: process.env.ELEVENLABS_AGENT_ID
