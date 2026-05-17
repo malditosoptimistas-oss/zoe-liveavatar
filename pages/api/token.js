@@ -42,14 +42,15 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         mode: 'LITE',
         avatar_id: process.env.LA_AVATAR_ID,
+        silence_detection: false,
         elevenlabs_agent_config: {
           secret_id: secretId,
           agent_id: process.env.ELEVENLABS_AGENT_ID
         }
       })
     });
-    const tokenData = await tokenRes.json();
 
+    const tokenData = await tokenRes.json();
     if (tokenData.data && tokenData.data.session_token) {
       return res.json({
         token: tokenData.data.session_token,
