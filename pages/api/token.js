@@ -1,14 +1,47 @@
+const rateMap = new Map();
+
 let cachedSecretId = null;
 let cachedSecretExpiry = 0;
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // SEGURIDAD 1 — CORS restringido a tu dominio
+  const origin = req.headers.origin || '';
+  const allowed = [
+    'https://zoe-liveavatar.vercel.app',
+    'https://zoe-liveavatar-git-main-zoe-ia-s-projects.vercel.app'
+  ];
+  if (allowed.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', 'https://zoe-liveavatar.vercel.app');
+  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
   if (req.method === 'OPTIONS') { res.status(200).end(); return; }
 
+  // SEGURIDAD 2 — Bloquear orígenes no autorizados
+  if (origin && !allowed.includes(origin)) {
+    return res.status(403).json({ error: 'No autorizado' });
+  }
+
+  // SEGURIDAD 3 — Rate limiting: máximo 10 sesiones por IP por hora
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || 'unknown';
+  const now = Date.now();
+  const entry = rateMap.get(ip) || { count: 0, reset: now + 3600000 };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + 3600000; }
+  entry.count++;
+  rateMap.set(ip, entry);
+  if (entry.count > 10) {
+    return res.status(429).json({ error: 'Demasiadas solicitudes. Intenta en unos minutos.' });
+  }
+
+  // SEGURIDAD 4 — Verificar variables de entorno
   const required = ['LA_API_KEY', 'LA_AVATAR_ID', 'ELEVENLABS_API_KEY', 'ELEVENLABS_AGENT_ID'];
   const missing = required.filter(k => !process.env[k]);
   if (missing.length > 0) {
-    return res.status(500).json({ error: 'Missing env vars', missing });
+    return res.status(500).json({ error: 'Configuración incompleta' }); // no revelar qué falta
   }
 
   try {
@@ -29,7 +62,7 @@ export default async function handler(req, res) {
       });
       const secretData = await secretRes.json();
       if (!secretData.data || !secretData.data.id) {
-        return res.status(500).json({ error: 'Secret error', detail: secretData });
+        return res.status(500).json({ error: 'Error al inicializar sesión' }); // no revelar detalle
       }
       secretId = secretData.data.id;
       cachedSecretId = secretId;
@@ -59,9 +92,10 @@ export default async function handler(req, res) {
         mode: 'LITE-ElevenLabs'
       });
     } else {
-      return res.status(500).json({ error: JSON.stringify(tokenData) });
+      return res.status(500).json({ error: 'No se pudo iniciar la sesión' }); // no revelar detalle
     }
+
   } catch(e) {
-    return res.status(500).json({ error: e.message });
+    return res.status(500).json({ error: 'Error interno del servidor' }); // no revelar e.message
   }
 }
