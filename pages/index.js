@@ -1,96 +1,80 @@
-import dynamic from 'next/dynamic';
+import { useEffect } from 'react';
 
-const ZoeApp = dynamic(() => Promise.resolve(() => {
-  const iniciar = async () => {
-    const btn = document.getElementById('btn');
-    const status = document.getElementById('status');
-    btn.disabled = true;
-    btn.textContent = 'Conectando...';
-    status.textContent = 'OBTENIENDO TOKEN...';
+export default function Home() {
+  useEffect(() => {
+    // Cargar SDK dinámicamente
+    const script = document.createElement('script');
+    script.type = 'module';
+    script.innerHTML = `
+      import { LiveAvatarSession, SessionEvent } from 'https://esm.run/@heygen/liveavatar-web-sdk';
 
-    try {
-      // Forzar token nuevo siempre
-      const res = await fetch('/api/token?nocache=' + Date.now(), {
-        cache: 'no-store',
-        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error);
+      window._startZoe = async function() {
+        const btn = document.getElementById('btn');
+        const status = document.getElementById('status');
+        btn.disabled = true;
+        btn.textContent = 'Conectando...';
+        status.textContent = 'OBTENIENDO TOKEN...';
+        try {
+          const res = await fetch('/api/token?t=' + Date.now(), { cache: 'no-store' });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error);
+          status.textContent = 'INICIANDO AVATAR...';
+          const session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: true });
+          const video = document.getElementById('avatar-video');
 
-      status.textContent = 'INICIANDO AVATAR...';
+          const mostrar = async (stream) => {
+            if (stream) video.srcObject = stream;
+            video.muted = true;
+            try { await video.play(); } catch(e) {}
+            setTimeout(() => { video.muted = false; }, 500);
+            document.getElementById('start').style.display = 'none';
+            document.getElementById('container').style.display = 'flex';
+            status.textContent = '';
+            setInterval(async () => { try { if (session.keepAlive) await session.keepAlive(); } catch(e) {} }, 25000);
+          };
 
-      const { LiveAvatarSession, SessionEvent } = await import('https://esm.run/@heygen/liveavatar-web-sdk');
-
-      const session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: true });
-      const video = document.getElementById('avatar-video');
-
-      const mostrarAvatar = async (stream) => {
-        if (stream) {
-          video.srcObject = stream;
+          session.on(SessionEvent.SESSION_STREAM_READY, async () => {
+            try { await session.attach(video); } catch(e) {}
+            await mostrar(null);
+          });
+          session.on('stream', async (stream) => { await mostrar(stream); });
+          session.on('ready', async () => {
+            if (document.getElementById('container').style.display !== 'flex') await mostrar(null);
+          });
+          session.on(SessionEvent.SESSION_DISCONNECTED, () => {
+            setTimeout(() => {
+              document.getElementById('start').style.display = 'flex';
+              document.getElementById('container').style.display = 'none';
+              btn.disabled = false; btn.textContent = 'Reconectando...';
+              window._startZoe();
+            }, 3000);
+          });
+          session.on('disconnected', () => {
+            setTimeout(() => {
+              document.getElementById('start').style.display = 'flex';
+              document.getElementById('container').style.display = 'none';
+              btn.disabled = false; btn.textContent = 'Reconectando...';
+              window._startZoe();
+            }, 3000);
+          });
+          session.on('error', (e) => {
+            status.textContent = 'Error: ' + e.message;
+            btn.disabled = false; btn.textContent = 'Reintentar';
+          });
+          await session.start();
+        } catch(e) {
+          status.textContent = 'Error: ' + e.message;
+          btn.disabled = false; btn.textContent = 'Reintentar';
         }
-        video.muted = true;
-        try { await video.play(); } catch(e) {}
-        setTimeout(() => { video.muted = false; }, 500);
-        document.getElementById('start').style.display = 'none';
-        document.getElementById('container').style.display = 'flex';
-        status.textContent = '';
-        setInterval(async () => {
-          try { if (session && session.keepAlive) await session.keepAlive(); } catch(e) {}
-        }, 25000);
       };
-
-      // Eventos modernos
-      session.on(SessionEvent.SESSION_STREAM_READY, async () => {
-        try { await session.attach(video); } catch(e) {}
-        await mostrarAvatar(null);
-      });
-
-      // Eventos legacy
-      session.on('stream', async (stream) => { await mostrarAvatar(stream); });
-      session.on('ready', async () => {
-        if (document.getElementById('container').style.display !== 'flex') {
-          await mostrarAvatar(null);
-        }
-      });
-
-      session.on(SessionEvent.SESSION_DISCONNECTED, () => {
-        setTimeout(() => {
-          document.getElementById('start').style.display = 'flex';
-          document.getElementById('container').style.display = 'none';
-          btn.disabled = false;
-          btn.textContent = 'Reconectando...';
-          iniciar();
-        }, 3000);
-      });
-
-      session.on('disconnected', () => {
-        setTimeout(() => {
-          document.getElementById('start').style.display = 'flex';
-          document.getElementById('container').style.display = 'none';
-          btn.disabled = false;
-          btn.textContent = 'Reconectando...';
-          iniciar();
-        }, 3000);
-      });
-
-      session.on('error', (e) => {
-        status.textContent = 'Error: ' + e.message;
-        btn.disabled = false;
-        btn.textContent = 'Reintentar';
-      });
-
-      await session.start();
-
-    } catch(e) {
-      status.textContent = 'Error: ' + e.message;
-      btn.disabled = false;
-      btn.textContent = 'Reintentar';
-    }
-  };
+    `;
+    document.head.appendChild(script);
+  }, []);
 
   return (
     <>
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
         *{margin:0;padding:0;box-sizing:border-box;}
         body{background:#060610;font-family:'Inter',sans-serif;color:#fff;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;}
         body::before{content:'';position:fixed;width:700px;height:700px;background:radial-gradient(circle,rgba(79,70,229,0.12) 0%,transparent 70%);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
@@ -111,13 +95,12 @@ const ZoeApp = dynamic(() => Promise.resolve(() => {
         .footer{margin-top:1.5rem;font-size:0.7rem;color:rgba(255,255,255,0.15);letter-spacing:2px;text-transform:uppercase;}
         .sponsor{margin-top:0.5rem;font-size:0.6rem;color:rgba(255,255,255,0.1);letter-spacing:3px;text-transform:uppercase;}
       `}</style>
-      <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet" />
       <div className="wrap">
         <div className="brand">Malditos Optimistas</div>
         <div className="title">ZOE</div>
         <div className="subtitle">Profesora &amp; Co-conductora IA agéntica</div>
         <div id="start" style={{display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <button className="btn" id="btn" onClick={iniciar}>Iniciar sesión en vivo</button>
+          <button className="btn" id="btn" onClick={() => window._startZoe()}>Iniciar sesión en vivo</button>
           <div className="status" id="status"></div>
         </div>
         <div id="container">
@@ -131,8 +114,4 @@ const ZoeApp = dynamic(() => Promise.resolve(() => {
       </div>
     </>
   );
-}), { ssr: false });
-
-export default function Home() {
-  return <ZoeApp />;
 }
