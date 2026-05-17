@@ -46,7 +46,7 @@
     <div class="title">ZOE</div>
     <div class="subtitle">Profesora &amp; Co-conductora IA agéntica</div>
     <div id="start" style="display:flex;flex-direction:column;align-items:center;">
-      <button class="btn" id="btn" onclick="iniciar()">Iniciar sesión en vivo</button>
+      <button class="btn" id="btn" onclick="window.iniciar()">Iniciar sesión en vivo</button>
       <div class="status" id="status"></div>
     </div>
     <div id="loading">
@@ -68,11 +68,8 @@
     import { LiveAvatarSession } from 'https://esm.run/@heygen/liveavatar-web-sdk';
 
     let keepAliveInterval = null;
-    let audioKeepAlive = null;
-    let audioCtx = null;
     let session = null;
     let loaderInterval = null;
-
     const msgs = ['CONECTANDO CON ZOE','INICIANDO AVATAR','PREPARANDO AUDIO','CASI LISTO'];
 
     function mostrarLoader(texto) {
@@ -91,31 +88,7 @@
       document.getElementById('loading').style.display = 'none';
     }
 
-    function iniciarAudioKeepAlive() {
-      if (!audioCtx) audioCtx = new AudioContext();
-      if (audioCtx.state === 'suspended') audioCtx.resume();
-      audioKeepAlive = setInterval(() => {
-        if (!audioCtx) return;
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        gain.gain.value = 0.0001;
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start();
-        setTimeout(() => { try { osc.stop(); } catch(e) {} }, 200);
-      }, 15000);
-    }
-
-    function detenerAudioKeepAlive() {
-      clearInterval(audioKeepAlive);
-      if (audioCtx) { try { audioCtx.close(); } catch(e) {} audioCtx = null; }
-    }
-
     window.iniciar = async function() {
-      const btn = document.getElementById('btn');
-      if (!audioCtx) audioCtx = new AudioContext();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
       mostrarLoader();
       try {
         const res = await fetch('/api/token?t=' + Date.now(), { cache: 'no-store' });
@@ -137,7 +110,6 @@
         session.on('ready', () => {
           ocultarLoader();
           document.getElementById('container').style.display = 'flex';
-          iniciarAudioKeepAlive();
           keepAliveInterval = setInterval(async () => {
             try { if (session && session.keepAlive) await session.keepAlive(); } catch(e) {}
           }, 25000);
@@ -145,28 +117,27 @@
 
         session.on('error', (e) => {
           ocultarLoader();
-          detenerAudioKeepAlive();
           clearInterval(keepAliveInterval);
           document.getElementById('start').style.display = 'flex';
           document.getElementById('status').textContent = 'Error: ' + e.message;
-          btn.disabled = false; btn.textContent = 'Reintentar';
+          document.getElementById('btn').disabled = false;
+          document.getElementById('btn').textContent = 'Reintentar';
         });
 
         session.on('disconnected', () => {
           clearInterval(keepAliveInterval);
-          detenerAudioKeepAlive();
           document.getElementById('container').style.display = 'none';
           mostrarLoader('RECONECTANDO...');
-          setTimeout(() => { iniciar(); }, 3000);
+          setTimeout(() => { window.iniciar(); }, 3000);
         });
 
         await session.start();
       } catch(e) {
         ocultarLoader();
-        detenerAudioKeepAlive();
         document.getElementById('start').style.display = 'flex';
         document.getElementById('status').textContent = 'Error: ' + e.message;
-        btn.disabled = false; btn.textContent = 'Reintentar';
+        document.getElementById('btn').disabled = false;
+        document.getElementById('btn').textContent = 'Reintentar';
         clearInterval(keepAliveInterval);
       }
     };
