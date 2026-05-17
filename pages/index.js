@@ -7,16 +7,80 @@ const ZoeApp = dynamic(() => Promise.resolve(() => {
     btn.disabled = true;
     btn.textContent = 'Conectando...';
     status.textContent = 'OBTENIENDO TOKEN...';
+
     try {
-      const res = await fetch('/api/token?t=' + Date.now());
+      // Forzar token nuevo siempre
+      const res = await fetch('/api/token?nocache=' + Date.now(), {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' }
+      });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
+
       status.textContent = 'INICIANDO AVATAR...';
-      const frameUrl = 'https://app.liveavatar.com/session?token=' + encodeURIComponent(data.token) + '&t=' + Date.now();
-      document.getElementById('avatar-frame').src = frameUrl;
-      document.getElementById('start').style.display = 'none';
-      document.getElementById('container').style.display = 'flex';
-      status.textContent = '';
+
+      const { LiveAvatarSession, SessionEvent } = await import('https://esm.run/@heygen/liveavatar-web-sdk');
+
+      const session = new LiveAvatarSession(data.token, { voiceChat: true, microphoneEnabled: true });
+      const video = document.getElementById('avatar-video');
+
+      const mostrarAvatar = async (stream) => {
+        if (stream) {
+          video.srcObject = stream;
+        }
+        video.muted = true;
+        try { await video.play(); } catch(e) {}
+        setTimeout(() => { video.muted = false; }, 500);
+        document.getElementById('start').style.display = 'none';
+        document.getElementById('container').style.display = 'flex';
+        status.textContent = '';
+        setInterval(async () => {
+          try { if (session && session.keepAlive) await session.keepAlive(); } catch(e) {}
+        }, 25000);
+      };
+
+      // Eventos modernos
+      session.on(SessionEvent.SESSION_STREAM_READY, async () => {
+        try { await session.attach(video); } catch(e) {}
+        await mostrarAvatar(null);
+      });
+
+      // Eventos legacy
+      session.on('stream', async (stream) => { await mostrarAvatar(stream); });
+      session.on('ready', async () => {
+        if (document.getElementById('container').style.display !== 'flex') {
+          await mostrarAvatar(null);
+        }
+      });
+
+      session.on(SessionEvent.SESSION_DISCONNECTED, () => {
+        setTimeout(() => {
+          document.getElementById('start').style.display = 'flex';
+          document.getElementById('container').style.display = 'none';
+          btn.disabled = false;
+          btn.textContent = 'Reconectando...';
+          iniciar();
+        }, 3000);
+      });
+
+      session.on('disconnected', () => {
+        setTimeout(() => {
+          document.getElementById('start').style.display = 'flex';
+          document.getElementById('container').style.display = 'none';
+          btn.disabled = false;
+          btn.textContent = 'Reconectando...';
+          iniciar();
+        }, 3000);
+      });
+
+      session.on('error', (e) => {
+        status.textContent = 'Error: ' + e.message;
+        btn.disabled = false;
+        btn.textContent = 'Reintentar';
+      });
+
+      await session.start();
+
     } catch(e) {
       status.textContent = 'Error: ' + e.message;
       btn.disabled = false;
@@ -40,7 +104,7 @@ const ZoeApp = dynamic(() => Promise.resolve(() => {
         .status{margin-top:1.5rem;font-size:0.8rem;color:rgba(255,255,255,0.3);letter-spacing:2px;min-height:1.2rem;}
         #container{display:none;width:100%;flex-direction:column;align-items:center;}
         .avatar-wrap{width:100%;aspect-ratio:16/9;border-radius:20px;overflow:hidden;box-shadow:0 0 80px rgba(79,70,229,0.3);position:relative;background:#0a0a1a;}
-        #avatar-frame{width:100%;height:100%;border:none;}
+        #avatar-video{width:100%;height:100%;object-fit:cover;}
         .live-badge{position:absolute;top:14px;left:14px;background:rgba(239,68,68,0.9);color:white;font-size:0.65rem;font-weight:700;letter-spacing:2px;padding:5px 12px;border-radius:100px;display:flex;align-items:center;gap:6px;z-index:10;}
         .live-dot{width:5px;height:5px;background:white;border-radius:50%;animation:pulse 1.5s infinite;}
         @keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
@@ -58,7 +122,7 @@ const ZoeApp = dynamic(() => Promise.resolve(() => {
         </div>
         <div id="container">
           <div className="avatar-wrap">
-            <iframe id="avatar-frame" allow="microphone; camera; autoplay; display-capture" style={{width:'100%',height:'100%',border:'none'}}></iframe>
+            <video id="avatar-video" autoPlay playsInline></video>
             <div className="live-badge"><div className="live-dot"></div>EN VIVO</div>
           </div>
         </div>
